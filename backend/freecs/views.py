@@ -8,6 +8,7 @@ from rest_framework.exceptions import ValidationError
 from django.db import IntegrityError, DatabaseError
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
+import stripe
 from .models import Course, Enrollment, Instructor,Category, Member,Preference
 from .serializers import CategorySerializer, CourseCreateUpdateSerializer, CourseSerializer, EnrollmentCreateSerializer, EnrollmentSerializer, InstructorSerializer, InstructorUpdateSerializer, MemberSerializer, PreferenceCreateSerializer, ResetPasswordSerializer, SendPasswordResetEmailSerialize,  UserLoginSerializer, UserProfileSerializer,UserChangePasswordSerializer, UserSerializer
 from django.contrib.auth import authenticate
@@ -327,6 +328,59 @@ class LogoutView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)   
 
+from django.http import HttpResponseRedirect
+       
+stripe.api_key = settings.STRIPE_SECRET_KEY
+
+class CreateStripeCheckoutSession(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user
+            course = Course.objects.get(id=request.data.get('courseID'))
+            total_price = course.price
+
+            # Create a Stripe checkout session
+            checkout_session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                line_items=[
+                    {
+                        'price_data': {
+                            'currency': 'usd',
+                            'product_data': {
+                                'name': course.name,
+                                'description': course.description,
+                            },
+                            'unit_amount': int(total_price * 100),
+                        },
+                        'quantity': 1,
+                    },
+                ],
+                mode='payment',
+                success_url=f'http://localhost:3000/success?session_id={{CHECKOUT_SESSION_ID}}',
+                cancel_url='http://localhost:3000/cancel',
+                metadata={
+                    'user_id': user.id,
+                    'course_id': course.id,
+                },
+            )
+
+            print({
+                'total_price': total_price,
+                'checkout_session_id': checkout_session.id,
+                'course_name': course.name,
+                'course_description': course.description,
+                'user_email': user.email,
+                'user_id': user.id,
+                'course_id': course.id,
+                'checkou_session_url': checkout_session.url
+            })
+
+            return HttpResponseRedirect(checkout_session.url)
+        
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 
