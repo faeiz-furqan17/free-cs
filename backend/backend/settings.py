@@ -139,7 +139,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=12),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
    
 }
@@ -156,3 +156,5 @@ EMAIL_HOST_USER = 'faeiz.furqan@arbisoft.com'
 EMAIL_HOST_PASSWORD = 'wjtfaniwipmrvrtw'
 EMAIL_USE_TLS= True
 EMAIL_USE_SSl= False
+STRIPE_SECRET_KEY = 'sk_test_51PnjEtP35zeYUOp22BXW3424VcHFO9sXpFxzfN9kWOr0XBSseVT6QILEnuDhFReIdUr0wksROk3r9fL4AzArBucW008M0gB4Lz'
+STRIPE_PUBLISHABLE_KEY = 'pk_test_51PnjEtP35zeYUOp2UtxuNgcvpG4Qb8vlLr1IQDJDyGoDUk68CVBI510Zt4Vc0NnYHZmq7X37rtbteAZSp5t32Abc00oXfIp9SJ'
