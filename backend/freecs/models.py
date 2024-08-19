@@ -20,7 +20,7 @@ class Instructor(models.Model):
     rate_per_hour = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.member.user.username} - {self.skills or 'No skills'}"
+        return self.member.user.username
 
 
 class Category(models.Model):

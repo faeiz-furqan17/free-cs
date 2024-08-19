@@ -15,10 +15,14 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
+    
+    # Check if we're running the server
+    if 'runserver' in sys.argv:
+        # First apply migrations
+        execute_from_command_line(['manage.py', 'migrate'])
+    
+    # Then continue with the usual command (e.g., runserver)
     execute_from_command_line(sys.argv)
-    # print("Manually running in debug mode as it's available in professional pycharm only. Revert it back before "
-    #       "production")
-    # execute_from_command_line(['C:\\Users\\faeiz.furqan_arbisof\\Desktop\\Projects\\Free CS\\free-cs-backend\\backend\\manage.py', 'runserver'])
 
 
 if __name__ == '__main__':

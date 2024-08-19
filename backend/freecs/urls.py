@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CategoryCreateView, CategoryView, CourseCreateView, CourseView, EnrollmentCreateView, EnrollmentListView, InstructorListView, InstructorUpdateView, LoginView, PreferredCoursesView, PreferenceCreateView, SignUpView, UserProfileView,UserChangePasswordView,SendPasswordRestEmailView,UserRestPasswordEmailView,SearchView
+from .views import CategoryCreateView, CategoryView, CourseCreateView, CourseView, EnrollmentCreateView, EnrollmentListView, InstructorListView, InstructorUpdateView, LoginView, LogoutView, PreferredCoursesView, PreferenceCreateView, SignUpView,  UserProfileView,UserChangePasswordView,SendPasswordRestEmailView,UserRestPasswordEmailView,SearchView
 
 urlpatterns = [
     path('signup/', SignUpView.as_view(), name='signup'),
@@ -19,5 +19,6 @@ urlpatterns = [
     path('preferences/add',PreferenceCreateView.as_view(),name='preferences-create'),
     path('preferred-courses/<int:member_id>/', PreferredCoursesView.as_view(), name='preferred_courses'),
     path('search/',SearchView.as_view(),name='search'),
-    
+    path('logout/',LogoutView.as_view(),name='logout'),
+
 ]

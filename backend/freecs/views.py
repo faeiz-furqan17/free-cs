@@ -1,4 +1,6 @@
+from urllib.request import BaseHandler
 from django import forms
+from django.shortcuts import redirect
 from rest_framework import status,generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -7,11 +9,13 @@ from django.db import IntegrityError, DatabaseError
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 from .models import Course, Enrollment, Instructor,Category, Member,Preference
-from .serializers import CategorySerializer, CourseCreateUpdateSerializer, CourseSerializer, EnrollmentCreateSerializer, EnrollmentSerializer, InstructorSerializer, InstructorUpdateSerializer, MemberSerializer, PreferenceCreateSerializer, ResetPasswordSerializer, SendPasswordResetEmailSerialize, UserLoginSerializer, UserProfileSerializer,UserChangePasswordSerializer
+from .serializers import CategorySerializer, CourseCreateUpdateSerializer, CourseSerializer, EnrollmentCreateSerializer, EnrollmentSerializer, InstructorSerializer, InstructorUpdateSerializer, MemberSerializer, PreferenceCreateSerializer, ResetPasswordSerializer, SendPasswordResetEmailSerialize,  UserLoginSerializer, UserProfileSerializer,UserChangePasswordSerializer, UserSerializer
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import LimitOffsetPagination
+from django.core.mail import send_mail
+from django.conf import settings
 
 
 def get_tokens_for_user(user):
@@ -24,15 +28,39 @@ def get_tokens_for_user(user):
 
 
 class SignUpView(generics.CreateAPIView):
-    def post(self, request):
+    def post(self, request, *args, **kwargs):
+        print(request.data)
         try:
-            serializer = MemberSerializer(data=request.data)
-            if serializer.is_valid():
-                user = serializer.save()
-                token = get_tokens_for_user(user)
-                return Response({"token": token, "data": serializer.data}, status=status.HTTP_201_CREATED)
+            user_serializer = UserSerializer(data=request.data)
+            if user_serializer.is_valid(raise_exception=True):
+                try:
+                    user = user_serializer.save()
+                except IntegrityError as e:
+                    if 'unique constraint' in str(e).lower():
+                        return Response({"error": "User already exists"}, status=status.HTTP_400_BAD_REQUEST)
+                    raise e
+                
+
+                dataDic={
+                    'user':user.id ,
+                    'is_instructor':request.data.get('is_instructor')
+                    
+                    
+                    
+                }
+                print(dataDic)
+                member_serializer = MemberSerializer(data=dataDic)
+                if member_serializer.is_valid():
+                    member_serializer.save(user=user)
+                    token = get_tokens_for_user(user)
+                    print(member_serializer.data)
+                    return Response({"token": token, "data": member_serializer.data}, status=status.HTTP_201_CREATED)
+                else:
+                    print(member_serializer.errors)
+                    return Response(member_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             else:
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
         except ValidationError as e:
             return Response({"error": "Validation Error", "details": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError as e:
@@ -43,8 +71,6 @@ class SignUpView(generics.CreateAPIView):
             return Response({"error": "Object Not Found", "details": str(e)}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": "An unexpected error occurred", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 
 #instructor list view 
 class InstructorListView(APIView):
@@ -89,21 +115,28 @@ class PreferenceCreateView(APIView):
         # Validate that the user is a member
         try:
             member = Member.objects.get(user=user)
-            print(member.id)
-            
         except Member.DoesNotExist:
             return Response({"error": "User must be a member to create preferences."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Include member in the request data
-        data = request.data.copy()
-        data['member'] = member.id
+        dataDict={
+            'member':{},
+            'category':request.data.copy()
+            
+        }
+        data = dataDict.copy()  
+        print(member.id)
         print(data)
+        print(data['member'])
+        data['member'] = member.id  # Ensure the member ID is included in the data
 
         serializer = PreferenceCreateSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 class PreferredCoursesView(APIView):
     def get(self, request, member_id, format=None):
 
@@ -114,16 +147,17 @@ class PreferredCoursesView(APIView):
         return Response(serializer.data, 200)
 
 class SearchView(APIView):
-    def get(self, request,format=None):
-        if (request.data.get('search_text')==''):
-            return Response(404)
+    def post(self, request, format=None):
+        search_text = request.data.get('search_text', None)
+        
+        if not search_text:
+            return Response({"detail": "No search text provided"}, status=status.HTTP_400_BAD_REQUEST)
+
         else:
-             courses = Course.objects.filter(Q(name__iregex=request.data.get('search_text'))| Q(category__name__iregex=request.data.get('search_text')))
-             instructors = Instructor.objects.filter(skills__iregex=request.data.get('search_text'))
+             courses = Course.objects.filter(Q(name__istartswith=request.data.get('search_text'))| Q(category__name__iregex=request.data.get('search_text')))
              
              course_serializer = CourseSerializer(courses, many=True)
-             
-            
+          
              return Response({"Courses":course_serializer.data,}, 200)
     
 
@@ -170,35 +204,82 @@ class EnrollmentListView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 #enrollment create 
 
+
 class EnrollmentCreateView(generics.CreateAPIView):
+    permission_classes = [IsAuthenticated]
 
-    serializer_class = EnrollmentCreateSerializer
+    def post(self, request, format=None):
+        user = request.user
+        print(request.user.username)
 
+        # Validate that the user is a member
+        try:
+            member = Member.objects.get(user=user)
+        except Member.DoesNotExist:
+            return Response({"error": "User must be a member to create preferences."}, status=status.HTTP_400_BAD_REQUEST)
 
+        print(request.data)
+        print("*********************************")
+
+        dataDict = {
+            'member': {},
+            'course': request.data.get('course'),
+        }
+        data = dataDict.copy()
+        data['member'] = member.id
+        print(data)
+        print("data to go here")
+
+        serializer = EnrollmentCreateSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+
+            # Send an email to the user after successful enrollment
+            subject = 'Enrollment Confirmation'
+            message = f'Dear {user.username},\n\nYou have successfully enrolled in the course with ID {data["course"]}.'
+            recipient_list = [user.email]
+
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                recipient_list,
+                fail_silently=False,
+            )
+
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
     def post(self, request, format=None):
-        serializer = UserLoginSerializer(data=request.data)
-        if serializer.is_valid():
-            username = serializer.validated_data.get('username')
-            password = serializer.validated_data.get('password')
-            print(f"Attempting to authenticate user: {username}")  # Debug print
-            
-            user = authenticate(username=username, password=password)
-            
-            if user is not None:
-                token =  get_tokens_for_user(user)
-                print("Authentication successful")  # Debug print
-                return Response({'msg': 'Login successful',"token":token}, status=status.HTTP_200_OK)
-            else:
-                print("Authentication failed")  # Debug print
-                return Response({'errors': {'non_field_errors': ['Username or password not valid']}}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
+        try:
+            serializer = UserLoginSerializer(data=request.data)
+            if serializer.is_valid():
+                username = serializer.validated_data.get('username')
+                password = serializer.validated_data.get('password')
+                print(f"Attempting to authenticate user: {username}")  # Debug print
+                
+                user = authenticate(username=username, password=password)
+                
+                if user is not None:
+                    token = get_tokens_for_user(user)
+                    print("Authentication successful")  # Debug print
+                    return Response({'msg': 'Login successful', "token": token, "id": user.id}, status=status.HTTP_200_OK)
+                else:
+                    print("Authentication failed")  # Debug print
+                    return Response({'errors': {'non_field_errors': ['Username or password not valid']}}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'errors': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"An error occurred: {str(e)}")  # Debug print
+            return Response({'errors': {'non_field_errors': ['An unexpected error occurred']}}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class UserProfileView(APIView):
     permission_classes=[IsAuthenticated]
     def get(self, request, format=None):
+      
+        print(request.user)
+
         serializer = UserProfileSerializer(request.user)
+        print(serializer.data)
     
         return Response(serializer.data, status=status.HTTP_200_OK)
         
@@ -230,4 +311,24 @@ class UserRestPasswordEmailView(APIView):
                 return Response({'msg': 'Password reset successful'}, status=status.HTTP_200_OK)
             
             return Response({'errors': serializers.errors}, status=status.HTTP_400_BAD_REQUEST) 
-        
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get("token")
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            
+            
+
+            return Response({"msg": "Logout successful"}, status=status.HTTP_205_RESET_CONTENT)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)   
+
+
+
+
+
+

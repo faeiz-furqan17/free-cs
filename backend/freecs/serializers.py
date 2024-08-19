@@ -13,6 +13,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['username', 'password','email','first_name', 'last_name']
 
     def create(self, validated_data):
+        # Todo: add checks prior to adding user
         user = User.objects.create_user(
             username=validated_data['username'],
             password=validated_data['password'],
@@ -23,16 +24,20 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 class MemberSerializer(serializers.ModelSerializer):
-    user = UserSerializer()
 
+    firstname = serializers.SerializerMethodField()
     class Meta:
         model = Member
-        fields = ['user', 'is_instructor']
+        fields = ['id', 'is_instructor', 'firstname']
+    
+    def get_firstname(self, obj):
+  
+        return obj.user.first_name
+    
 
     def create(self, validated_data):
         user_data = validated_data.pop('user')
-        user = UserSerializer.create(UserSerializer(), validated_data=user_data)
-        member, created = Member.objects.update_or_create(user=user, **validated_data)
+        member, created = Member.objects.update_or_create(user=user_data, **validated_data)
         if member.is_instructor:
             Instructor.objects.create(member=member)
         return member
@@ -42,7 +47,9 @@ class InstructorSerializer(serializers.ModelSerializer):
     member=MemberSerializer()
     class Meta:
         model = Instructor
-        fields = ['member', 'id','skills', 'bio', 'experience', 'rate_per_hour']
+        fields = ['id','member','skills', 'bio', 'experience', 'rate_per_hour']
+    
+    
 
 #Updating Values for the Instructor
 class InstructorUpdateSerializer(serializers.ModelSerializer):
@@ -87,8 +94,8 @@ class CourseCreateUpdateSerializer(serializers.ModelSerializer):
 #Enrollment Serializer
 
 class EnrollmentSerializer(serializers.ModelSerializer):
-    member=MemberSerializer()
-    course = CourseSerializer(many=True ,read_only=True)
+    member = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all())
+    course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.all())
     class Meta:
         model = Enrollment
         fields=['id','course', 'member','enrollment_date']
@@ -97,8 +104,8 @@ class EnrollmentSerializer(serializers.ModelSerializer):
     
         
 class EnrollmentCreateSerializer(serializers.ModelSerializer):
-    member=MemberSerializer()
-    course = CourseSerializer(many=True )
+    member = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all())
+    course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.all())
     class Meta:
         model = Enrollment
         fields=['id','course', 'member','enrollment_date']
@@ -113,9 +120,16 @@ class UserLoginSerializer(serializers.ModelSerializer):
         fields=['username', 'password']
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    is_instructor = serializers.SerializerMethodField()
     class Meta:
         model=User
-        fields=['id','username', 'email']
+        fields=['id','username', 'email','is_instructor']
+    def get_is_instructor(self, obj):
+        try:
+            member = Member.objects.get(user=obj)
+            return member.is_instructor
+        except Member.DoesNotExist:
+            return False
 
 class UserChangePasswordSerializer(serializers.Serializer):
     password = serializers.CharField(max_length=255, style={'input_type': 'password'}, write_only=True)
@@ -192,3 +206,4 @@ class ResetPasswordSerializer(serializers.Serializer):
         except DjangoUnicodeDecodeError as identifier:
              PasswordResetTokenGenerator().check_token(user, token)
              raise serializers.ValidationError("Token is invalid.")
+
