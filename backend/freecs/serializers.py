@@ -1,7 +1,7 @@
 from rest_framework import serializers 
 
 from django.contrib.auth.models import User
-from .models import Category, Course, Enrollment, Instructor, Member, Preference
+from .models import Category, Course, Enrollment, Instructor, Member, Preference,ProfileImage
 from django.utils.encoding import smart_str,force_bytes,DjangoUnicodeDecodeError
 from django.utils.http import urlsafe_base64_decode,urlsafe_base64_encode
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
@@ -206,4 +206,13 @@ class ResetPasswordSerializer(serializers.Serializer):
         except DjangoUnicodeDecodeError as identifier:
              PasswordResetTokenGenerator().check_token(user, token)
              raise serializers.ValidationError("Token is invalid.")
+
+class ProfileImageSerializer(serializers.ModelSerializer):
+    member = serializers.PrimaryKeyRelatedField(queryset=Member.objects.all())
+
+
+    class Meta:
+        model = ProfileImage
+        fields = ['id','member', 'image']
+        
 

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CategoryCreateView, CategoryView, CourseCreateView, CourseView, EnrollmentCreateView, EnrollmentListView, InstructorListView, InstructorUpdateView, LoginView, LogoutView, PreferredCoursesView, PreferenceCreateView, SignUpView,  UserProfileView,UserChangePasswordView,SendPasswordRestEmailView,UserRestPasswordEmailView,SearchView,CreateStripeCheckoutSession
+from .views import CategoryCreateView, CategoryView, CourseCreateView, CourseView, EnrollmentCreateView, EnrollmentListView, InstructorListView, InstructorUpdateView, LoginView, LogoutView, PreferredCoursesView, PreferenceCreateView, SignUpView,  UserProfileView,UserChangePasswordView,SendPasswordRestEmailView,UserRestPasswordEmailView,SearchView,CreateStripeCheckoutSession,UploadProfileImage
 
 urlpatterns = [
     path('signup/', SignUpView.as_view(), name='signup'),
@@ -21,5 +21,7 @@ urlpatterns = [
     path('search/',SearchView.as_view(),name='search'),
     path('logout/',LogoutView.as_view(),name='logout'),
     path('checkout/',CreateStripeCheckoutSession.as_view(),name='checkout'),
+    path('upload-image/',UploadProfileImage.as_view(),name='upload_image'),
+    
 
 ]

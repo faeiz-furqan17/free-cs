@@ -2,7 +2,7 @@
 from django.contrib import admin
 from django.contrib.auth.models import User
 
-from .models import Member,Instructor,Category,Course,Enrollment,Preference
+from .models import Member,Instructor,Category,Course,Enrollment,Preference,ProfileImage
 
 
 class MemberInline(admin.StackedInline):
@@ -49,3 +49,4 @@ admin.site.register(Enrollment)
 admin.site.register(Preference, PreferenceAdmin)
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
+admin.site.register(ProfileImage)

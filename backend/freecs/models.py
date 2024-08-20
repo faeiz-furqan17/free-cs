@@ -56,3 +56,10 @@ class Preference(models.Model):
 
     def __str__(self) -> str:
         return self.member.user.username
+class ProfileImage(models.Model):
+    member = models.OneToOneField(Member, on_delete=models.CASCADE)
+    image =  models.CharField(max_length=500)
+    
+    def __str__(self) -> str:
+        return self.member.user.username
+    
