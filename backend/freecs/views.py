@@ -1,3 +1,4 @@
+
 from urllib.request import BaseHandler
 from django import forms
 from django.shortcuts import redirect
@@ -9,14 +10,22 @@ from django.db import IntegrityError, DatabaseError
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q
 import stripe
-from .models import Course, Enrollment, Instructor,Category, Member,Preference
-from .serializers import CategorySerializer, CourseCreateUpdateSerializer, CourseSerializer, EnrollmentCreateSerializer, EnrollmentSerializer, InstructorSerializer, InstructorUpdateSerializer, MemberSerializer, PreferenceCreateSerializer, ResetPasswordSerializer, SendPasswordResetEmailSerialize,  UserLoginSerializer, UserProfileSerializer,UserChangePasswordSerializer, UserSerializer
+from .models import Course, Enrollment, Instructor,Category, Member,Preference, ProfileImage
+from .serializers import CategorySerializer, CourseCreateUpdateSerializer, CourseSerializer, EnrollmentCreateSerializer, EnrollmentSerializer, InstructorSerializer, InstructorUpdateSerializer, MemberSerializer, PreferenceCreateSerializer, ProfileImageSerializer, ResetPasswordSerializer, SendPasswordResetEmailSerialize,  UserLoginSerializer, UserProfileSerializer,UserChangePasswordSerializer, UserSerializer
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import LimitOffsetPagination
 from django.core.mail import send_mail
 from django.conf import settings
+
+import pyrebase
+from django.utils.text import slugify
+import os
+
+def secure_filename(filename):
+    name, ext = os.path.splitext(filename)
+    return f"{slugify(name)}{ext}"
 
 
 def get_tokens_for_user(user):
@@ -374,15 +383,143 @@ class CreateStripeCheckoutSession(APIView):
                 'user_email': user.email,
                 'user_id': user.id,
                 'course_id': course.id,
-                'checkou_session_url': checkout_session.url
+                'checkout_session_url': checkout_session.url
             })
 
-            return HttpResponseRedirect(checkout_session.url)
+            return Response(
+                {
+
+                    'checkout_session_url': checkout_session.url
+                },
+                status=status.HTTP_200_OK,
+            )
         
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+serviceAccount ={
+     "type": "service_account",
+  "project_id": "profile-picture-9055d",
+  "private_key_id": "0188cf8a88ed91a40480b0bd6db14be61bcbf45f",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC26gXwZWJBvEat\nVbUnWUg/IiE1pWjaqTtfLkilwDFF1fSOgL0n4jnkpByb/XRUDPa9EfN+GVT0YvhU\ntVkrOKfsbAodNHsSYjsCGeL+EOI3JajgvK/3EdWA7SbaypZS0Y/liDlFqzZYn0Ys\n+OgDxnwBNSc3rLNie6A/qWiRCJ3PN+B+BD/2gmgdh8wag9TqnkgsgGIpzBNcofMK\nCZBaO5WBnWhx6SeR7lEUHP7G3mb9mk+Ux8fEugH+2s1B7d2uuig9rfMwXS/7w83i\nL7Qkz4emZtKu53UXL+EfEBqzoc65uR2mwGo9r8umsXb5g6IRfDsGz4Js+11IFAtP\nU/mooRzzAgMBAAECggEAEWsPU2PxgOKtyk4kmObSz0Gamaddk6D/neHkRMscsL1I\nnhSwA+8c5eMjiaPk+CdfNwRRbxsjcL2cpJhmXDbMyuHuQ/deQZMSx8bw9j0OWwOz\nkBR3yevWrIHTgYyULGEiC6YMFNB9NYrpSFlljWJ70Yj0ae6rYGqhs8jtQ7kR1Lcg\ntaQKHpbeHz2DGw2gDEzRNREqx/Lugq+w6fikij2Jm+XqUBlWseVdeDP/mFWHuIjw\nGx660OPSUkybjlkeaC2v2icTEO+HfSjwGEZiCTUTeDMn4VuFRClzcpPZ7Q/v250P\nKA4xxQgo05Mc96zhecOC8f1MDwIb+mTi4KfhcyHNkQKBgQDimpmSzEUSmtQfmlxO\nZzYW+NcpdUSYkzrKl/RWM7hYZ1YoirJs/steMKoQr4C1DlX2D6A7nPyaAjMOD70h\n6CI3v5TRBSe3zF0SMrhZLk2xeMT1Bpkzj82MVdUpS1OlpHrduXGlRiy/ntONV51N\nba83hf+R4FGHA0V+Jm+fcWt5IwKBgQDOpIJHmcKgkPGrH63egS8LQY0vAYktQrf6\nLpF4TQADt9Q07gDUdmgBQaOvF1chK/vm/U1s5lkcLT1d8+aiP7/ijWNWOROcRK/a\n1N0l1M30uhnHNkfRTAoeo2W71PItEROAoa+xjFYBfhwlM87OY3tTvtMmor0y9eV9\ntQNb/GBR8QKBgE4KBB2kL52KqMcBeAygSuZ6aE8kzazl93dSAZm2UiRP4kIwEear\nkQotJER+zIqOF1iYZQxisjOv0jljfjUxJqegWPXrGpSX0u2zff1ojuUxvFLOJPC2\n84kC/lgsUvBWxuGZPeQ3WK3dWunwZIIH5jHu+ecZI7qli8c4IXT9sI+VAoGBAKVL\n4wrzbESUrTx9ss9x9vfCD/Wx/NE/tXtjFOpubbyLqCxO1kseDEQ1BYJh4Uifrnkv\n1mduO4nWhmhJWgwfgpbvEq8+KPmv2Bvseppwh+9jjotUWE6LzOyFODPwO2jhaABV\nVf1ojMPU5R69OojN+zEaTD1zoHTLTjAoQ++pCkOBAoGAZZWqBNRXQbzIbFnfb8B4\nUhb5rYFlAZofg1drvD2bIMHfWP6GGx/WXftQuwOmkwgZEoxfH3CUztGIkim6D2cD\n2i3diUMxFnuxxZXoybNDU+TKOL7ZAUDqx48LihjK2ejjt9omhvpMvjQa4cUBvSaN\nOkKMraHyz2feUFDlBAmh3SU=\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-wki55@profile-picture-9055d.iam.gserviceaccount.com",
+  "client_id": "115643539934012970894",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-wki55%40profile-picture-9055d.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
 
+config = {
+  "apiKey": "AIzaSyCBzQHvMXVJ9v672MQYQVijblisEsqB5sc",
+  "authDomain": "profile-picture-9055d.firebaseapp.com",
+  "projectId": "profile-picture-9055d",
+  "storageBucket": "profile-picture-9055d.appspot.com",
+  "messagingSenderId": "240752865185",
+  "appId": "1:240752865185:web:b7109d6f0bf48d67c565e0",
+  "serviceAccount":serviceAccount,
+  "databaseURL":"https://profile-picture-9055d-default-rtdb.firebaseio.com/"
+  }
+firebase = pyrebase.initialize_app(config)
+storage = firebase.storage()
 
+class UploadProfileImage(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def post(self, request, format=None):
+        """Handles image upload (Create)"""
+        try:
+            user = request.user
+
+            try:
+                member = Member.objects.get(user=user)
+            except Member.DoesNotExist:
+                return Response({"error": "User must be a member to create preferences."}, status=status.HTTP_400_BAD_REQUEST)
+
+            image = request.FILES.get('image')
+            if not image:
+                return Response({"error": "No image file found."}, status=status.HTTP_400_BAD_REQUEST)
+
+            filename = secure_filename(image.name)
+            image_content = image.read()  # Read the file content as bytes
+
+            # Upload the image content to Firebase
+            storage.child(f'profile_images/{filename}').put(image_content)
+            image_url = storage.child(f'profile_images/{filename}').get_url(None)
+
+            data = {
+                'member': member.id,
+                'image': image_url,
+            }
+
+            serializer = ProfileImageSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response({'image_url': image_url}, status=status.HTTP_201_CREATED)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            print(e)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def get(self, request, format=None):
+        """Handles retrieving the current profile image (Read)"""
+        try:
+            user = request.user
+
+            try:
+                member = Member.objects.get(user=user)
+                print(member)
+            except Member.DoesNotExist:
+                return Response({"error": "User must be a member to retrieve preferences."}, status=status.HTTP_400_BAD_REQUEST)
+
+            profile_image = ProfileImage.objects.filter(member=member).first()
+            if not profile_image:
+                return Response({"error": "Profile image not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = ProfileImageSerializer(profile_image)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(e)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, format=None):
+        print(request.data)
+        """Handles updating the profile image (Update)"""
+        try:
+            user = request.user
+
+            try:
+                member = Member.objects.get(user=user)
+            except Member.DoesNotExist:
+                return Response({"error": "User must be a member to update preferences."}, status=status.HTTP_400_BAD_REQUEST)
+
+            profile_image = ProfileImage.objects.filter(member=member).first()
+            print(profile_image)
+            if not profile_image:
+                return Response({"error": "Profile image not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            image = request.FILES.get('image')
+            if not image:
+                return Response({"error": "No image file found."}, status=status.HTTP_400_BAD_REQUEST)
+
+            filename = secure_filename(image.name)
+            image_content = image.read()  # Read the file content as bytes
+
+            # Upload the updated image content to Firebase
+            storage.child(f'profile_images/{filename}').put(image_content)
+            image_url = storage.child(f'profile_images/{filename}').get_url(None)
+
+            profile_image.image = image_url
+            print(profile_image)
+            profile_image.save()
+
+            return Response({'image_url': image_url}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(e)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
